@@ -8,7 +8,7 @@ Sistema de gestión para restaurantes — órdenes, cocina y control operativo.
 - 🔄 Actualización en tiempo real  
 - 👤 Autenticación de usuarios  
 
-
+![](src/assets/images/YEKAAPNGLOGO.png)
 ## ⚙️ Instalación y ejecución
 ```bash
 # Clonar el repositorio
@@ -22,6 +22,9 @@ npm install
 
 # Ejecutar en modo desarrollo
 npm run dev
+
+
+
 
 
 
