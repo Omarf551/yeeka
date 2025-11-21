@@ -10,10 +10,33 @@ interface CashierDashboardProps {
   user: any;
 }
 
+// Componente Skeleton estilo Facebook con shimmer
+const Skeleton = ({ className }: { className?: string }) => (
+  <div
+    className={`relative overflow-hidden rounded ${className || ''}`}
+    style={{ backgroundColor: '#e4e6e7' }}
+  >
+    <div
+      className="absolute inset-0"
+      style={{
+        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)',
+        animation: 'shimmer 1.5s infinite',
+      }}
+    />
+    <style>{`
+      @keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+      }
+    `}</style>
+  </div>
+);
+
 export function CashierDashboard({ user }: CashierDashboardProps) {
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [productos, setProductos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processingOrders, setProcessingOrders] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     loadData();
@@ -22,6 +45,9 @@ export function CashierDashboard({ user }: CashierDashboardProps) {
   }, []);
 
   const loadData = async () => {
+    // No recargar si hay pedidos procesándose
+    if (processingOrders.size > 0) return;
+    
     try {
       const [pedidosRes, productosRes] = await Promise.all([
         fetch(`https://${projectId}.supabase.co/functions/v1/make-server-402bd9dc/pedidos`, {
@@ -35,7 +61,7 @@ export function CashierDashboard({ user }: CashierDashboardProps) {
       const pedidosData = await pedidosRes.json();
       const productosData = await productosRes.json();
 
-      // Get items for all orders
+      // Cargar items de todos los pedidos en paralelo
       const pedidosWithItems = await Promise.all(
         (pedidosData.pedidos || []).map(async (pedido: any) => {
           const itemsRes = await fetch(
@@ -57,6 +83,13 @@ export function CashierDashboard({ user }: CashierDashboardProps) {
   };
 
   const handleMarkAsDelivered = async (pedidoId: number) => {
+    setProcessingOrders(prev => new Set(prev).add(pedidoId));
+    
+    // Actualización optimista: mover a entregado inmediatamente
+    setPedidos(prev => prev.map(p => 
+      p.id === pedidoId ? { ...p, estado: 'entregado' } : p
+    ));
+    
     try {
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-402bd9dc/pedidos/${pedidoId}`,
@@ -70,15 +103,20 @@ export function CashierDashboard({ user }: CashierDashboardProps) {
         }
       );
 
-      if (!response.ok) {
-        throw new Error('Error al marcar pedido como entregado');
-      }
+      if (!response.ok) throw new Error('Error al marcar pedido');
 
       toast.success('Pedido marcado como entregado');
-      loadData();
     } catch (error: any) {
       console.error('Error updating order:', error);
       toast.error('Error al actualizar pedido');
+      // Revertir en caso de error
+      loadData();
+    } finally {
+      setProcessingOrders(prev => {
+        const next = new Set(prev);
+        next.delete(pedidoId);
+        return next;
+      });
     }
   };
 
@@ -94,7 +132,7 @@ export function CashierDashboard({ user }: CashierDashboardProps) {
   };
 
   const allItemsReady = (items: any[]) => {
-    return items.every(item => item.estado === 'listo');
+    return items?.every(item => item.estado === 'listo') ?? false;
   };
 
   const pendingOrders = pedidos.filter(p => p.estado === 'pendiente');
@@ -164,10 +202,16 @@ export function CashierDashboard({ user }: CashierDashboardProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {pendingOrders.map((pedido) => {
               const total = calculateOrderTotal(pedido.items || []);
-              const readyToDeliver = allItemsReady(pedido.items || []);
+              const readyToDeliver = allItemsReady(pedido.items);
+              const isProcessing = processingOrders.has(pedido.id);
 
               return (
-                <Card key={pedido.id} className={readyToDeliver ? 'border-l-4 border-l-green-500' : ''}>
+                <Card 
+                  key={pedido.id} 
+                  className={`transition-opacity ${
+                    readyToDeliver ? 'border-l-4 border-l-green-500' : ''
+                  } ${isProcessing ? 'opacity-60' : ''}`}
+                >
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
@@ -233,11 +277,15 @@ export function CashierDashboard({ user }: CashierDashboardProps) {
 
                       <Button
                         className="w-full"
-                        disabled={!readyToDeliver}
+                        disabled={!readyToDeliver || isProcessing}
                         onClick={() => handleMarkAsDelivered(pedido.id)}
                       >
                         <CheckCircle className="size-4 mr-2" />
-                        {readyToDeliver ? 'Marcar como Entregado' : 'Esperando Cocina'}
+                        {isProcessing 
+                          ? 'Procesando...' 
+                          : readyToDeliver 
+                            ? 'Marcar como Entregado' 
+                            : 'Esperando Cocina'}
                       </Button>
                     </div>
                   </CardContent>

@@ -12,6 +12,28 @@ interface WaiterDashboardProps {
   user: any;
 }
 
+// Componente Skeleton estilo Facebook con shimmer
+const Skeleton = ({ className }: { className?: string }) => (
+  <div
+    className={`relative overflow-hidden rounded ${className || ''}`}
+    style={{ backgroundColor: '#e4e6e7' }}
+  >
+    <div
+      className="absolute inset-0"
+      style={{
+        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)',
+        animation: 'shimmer 1.5s infinite',
+      }}
+    />
+    <style>{`
+      @keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+      }
+    `}</style>
+  </div>
+);
+
 export function WaiterDashboard({ user }: WaiterDashboardProps) {
   const [productos, setProductos] = useState<any[]>([]);
   const [categorias, setCategorias] = useState<any[]>([]);
@@ -61,12 +83,9 @@ export function WaiterDashboard({ user }: WaiterDashboardProps) {
       );
 
       const data = await response.json();
-      
-      // Filter only this waiter's orders
       const waiterPedidos = (data.pedidos || []).filter(
         (p: any) => p.mesero_id === user.id
       );
-      
       setPedidos(waiterPedidos);
     } catch (error) {
       console.error('Error loading pedidos:', error);
@@ -127,9 +146,7 @@ export function WaiterDashboard({ user }: WaiterDashboardProps) {
         }
       );
 
-      if (!response.ok) {
-        throw new Error('Error al crear pedido');
-      }
+      if (!response.ok) throw new Error('Error al crear pedido');
 
       toast.success('Pedido creado exitosamente');
       setCart({});
@@ -143,12 +160,6 @@ export function WaiterDashboard({ user }: WaiterDashboardProps) {
     }
   };
 
-  const getCategoriaName = (categoriaId: number | null) => {
-    if (!categoriaId) return 'Sin categoría';
-    const categoria = categorias.find(c => c.id === categoriaId);
-    return categoria ? categoria.nombre : 'Sin categoría';
-  };
-
   const getCartTotal = () => {
     return Object.entries(cart).reduce((total, [productoId, cantidad]) => {
       const producto = productos.find(p => p.id === parseInt(productoId));
@@ -160,8 +171,92 @@ export function WaiterDashboard({ user }: WaiterDashboardProps) {
     return Object.values(cart).reduce((sum, cant) => sum + cant, 0);
   };
 
+  // Skeleton Loading State
   if (loading) {
-    return <div className="text-center py-8">Cargando...</div>;
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Products Section Skeleton */}
+        <div className="lg:col-span-2 space-y-6">
+          <div>
+            <Skeleton className="h-7 w-48 mb-2" />
+            <Skeleton className="h-5 w-64" />
+          </div>
+
+          {/* Category Cards Skeleton */}
+          {[1, 2].map((cat) => (
+            <Card key={cat}>
+              <CardHeader>
+                <Skeleton className="h-6 w-32" />
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {[1, 2, 3, 4].map((prod) => (
+                    <div
+                      key={prod}
+                      className="flex items-center justify-between p-4 border rounded-lg"
+                    >
+                      <div className="space-y-2">
+                        <Skeleton className="h-5 w-28" />
+                        <Skeleton className="h-4 w-16" />
+                      </div>
+                      <Skeleton className="h-9 w-24" />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Cart and Orders Skeleton */}
+        <div className="space-y-6">
+          {/* Cart Skeleton */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="size-5 text-gray-300" />
+                <Skeleton className="h-6 w-28" />
+              </div>
+              <Skeleton className="h-4 w-24 mt-1" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+              <div className="py-8 flex justify-center">
+                <Skeleton className="h-5 w-24" />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Orders Skeleton */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <Skeleton className="h-6 w-28" />
+                <Skeleton className="h-8 w-8 rounded" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {[1, 2, 3].map((order) => (
+                  <div key={order} className="p-3 border rounded-lg">
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-2">
+                        <Skeleton className="h-5 w-20" />
+                        <Skeleton className="h-4 w-16" />
+                      </div>
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -379,11 +474,7 @@ export function WaiterDashboard({ user }: WaiterDashboardProps) {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>Mis Pedidos</CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={loadPedidos}
-              >
+              <Button variant="ghost" size="sm" onClick={loadPedidos}>
                 <RefreshCw className="size-4" />
               </Button>
             </div>
@@ -394,10 +485,7 @@ export function WaiterDashboard({ user }: WaiterDashboardProps) {
                 <p className="text-gray-500 text-center py-4">Sin pedidos</p>
               ) : (
                 pedidos.map((pedido) => (
-                  <div
-                    key={pedido.id}
-                    className="p-3 border rounded-lg"
-                  >
+                  <div key={pedido.id} className="p-3 border rounded-lg">
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <p className="text-gray-900">Mesa {pedido.mesa}</p>
